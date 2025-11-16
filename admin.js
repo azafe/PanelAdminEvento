@@ -1,178 +1,146 @@
-// =============================
-// DATA DEL EVENTO (EDITABLE)
-// =============================
+// URL pública del CSV de Google Sheets
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0rZ8Ja0766QxpTGYCCWu0dz07Oz5YUqj9dS9bxhD8Snl7WPyRSfj6gsq0mozaoaUtuC_gCtbiTSvA/pub?gid=82462936&single=true&output=csv";
 
-const eventData = {
-  fecha: "Domingo 14 de diciembre 2025",
-  precioNoche: 55000,
-  precioFull: 65000,
+// --- Utilidad: parsear CSV respetando comas dentro de comillas ---
+function parseCSV(text) {
+    const rows = [];
+    let current = [];
+    let value = "";
+    let inQuotes = false;
 
-  // Invitados (podés sincronizar estos números con tu Excel)
-  invitados: [
-    // nombre, tipo, total, señaPagada, saldo, estado
-    { nombre: "Santiago Cogorno", tipo: "Full Pass", total: 65000, senia: 32500, saldo: 32500 },
-    { nombre: "Luciana Pérez", tipo: "Noche", total: 55000, senia: 55000, saldo: 0 },
-    { nombre: "Carlos López", tipo: "Noche", total: 55000, senia: 30000, saldo: 25000 },
-    { nombre: "Ana García", tipo: "Full Pass", total: 65000, senia: 65000, saldo: 0 },
-    { nombre: "Denis Silva", tipo: "Noche", total: 55000, senia: 0, saldo: 55000 },
-  ],
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
 
-  // Costos resumidos (traelos de tu Excel)
-  costosFijos: 510000 + 60000 + 60000, // quincho + DJ + flete DJ (ejemplo)
-  costosVariablesEstimados: 800000, // acá ponés lo que te dé la hoja de variables
-};
+        if (char === '"' && inQuotes && next === '"') {
+            // comilla escapada
+            value += '"';
+            i++;
+        } else if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === "," && !inQuotes) {
+            current.push(value);
+            value = "";
+        } else if ((char === "\n" || char === "\r") && !inQuotes) {
+            if (value !== "" || current.length > 0) {
+                current.push(value);
+                rows.push(current);
+                current = [];
+                value = "";
+            }
+        } else {
+            value += char;
+        }
+    }
+    if (value !== "" || current.length > 0) {
+        current.push(value);
+        rows.push(current);
+    }
 
-// =============================
-// HELPERS
-// =============================
-
-function formatMoney(num) {
-  if (isNaN(num)) return "$0";
-  return "$" + num.toLocaleString("es-AR");
+    return rows.filter(r => r.length > 0);
 }
 
-// =============================
-// CÁLCULOS BASE
-// =============================
-
-function calcularResumenInvitados(data) {
-  const total = data.invitados.length;
-  const full = data.invitados.filter((i) => i.tipo === "Full Pass").length;
-  const noche = data.invitados.filter((i) => i.tipo === "Noche").length;
-  const porcentajeFull = total > 0 ? Math.round((full / total) * 100) : 0;
-  return { total, full, noche, porcentajeFull };
+async function loadInvitados() {
+    const response = await fetch(sheetURL);
+    const text = await response.text();
+    const rows = parseCSV(text);
+    return rows;
 }
 
-function calcularFinanciero(data) {
-  const ingresos = data.invitados.reduce((acc, inv) => acc + inv.total, 0);
-  const costosFijos = data.costosFijos || 0;
-  const costosVariables = data.costosVariablesEstimados || 0;
-  const resultado = ingresos - costosFijos - costosVariables;
-  return { ingresos, costosFijos, costosVariables, resultado };
+async function renderPanel() {
+    const rows = await loadInvitados();
+    if (!rows || rows.length === 0) return;
+
+    const headers = rows[0].map(h => h.trim());
+    const dataRows = rows.slice(1).filter(r => r[0].trim() !== "");
+
+    // Índices de columnas según encabezados
+    const idx = {
+        nombre: headers.indexOf("Nombre"),
+        sector: headers.indexOf("Sector"),
+        confirmo: headers.indexOf("Confirmó"),
+        totalPersonas: headers.indexOf("Total Personas"),
+        cena: headers.indexOf("Cena"),
+        todoDia: headers.indexOf("Todo el día"),
+        debePagar: headers.indexOf("Debe Pagar"),
+        montoPagado: headers.indexOf("Monto Pagado"),
+        faltaPagar: headers.indexOf("Falta Pagar"),
+        observaciones: headers.indexOf("Observaciones")
+    };
+
+    // ---- KPIs ----
+    let totalInvitados = 0;
+    let totalFullPass = 0;
+    let totalSoloCena = 0;
+    let totalRecaudado = 0;
+    let totalPendiente = 0;
+
+    const invitadosConfirmados = dataRows.filter(r => {
+        const v = idx.confirmo >= 0 ? (r[idx.confirmo] || "").toString().toLowerCase() : "";
+        return v === "si" || v === "sí";
+    });
+
+    invitadosConfirmados.forEach(r => {
+        const personas = idx.totalPersonas >= 0 ? Number(r[idx.totalPersonas] || 0) : 1;
+        totalInvitados += personas;
+
+        const esFull = idx.todoDia >= 0 ? Number(r[idx.todoDia] || 0) : 0;
+        const esCena = idx.cena >= 0 ? Number(r[idx.cena] || 0) : 0;
+
+        totalFullPass += esFull;
+        totalSoloCena += esCena;
+
+        const pagado = idx.montoPagado >= 0 ? Number((r[idx.montoPagado] || "0").toString().replace(/[^0-9.-]/g, "")) : 0;
+        const falta = idx.faltaPagar >= 0 ? Number((r[idx.faltaPagar] || "0").toString().replace(/[^0-9.-]/g, "")) : 0;
+
+        totalRecaudado += pagado;
+        totalPendiente += falta;
+    });
+
+    // Pintar KPIs
+    const fmt = n => n.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+
+    document.getElementById("kpi-total-invitados").textContent = totalInvitados;
+    document.getElementById("kpi-full-pass").textContent = totalFullPass;
+    document.getElementById("kpi-solo-cena").textContent = totalSoloCena;
+    document.getElementById("kpi-recaudado").textContent = fmt(totalRecaudado);
+    document.getElementById("kpi-pendiente").textContent = fmt(totalPendiente);
+
+    // ---- Tabla de invitados ----
+    const headEl = document.getElementById("tabla-head");
+    const bodyEl = document.getElementById("tabla-body");
+    headEl.innerHTML = "";
+    bodyEl.innerHTML = "";
+
+    // Encabezados
+    const trHead = document.createElement("tr");
+    headers.forEach(h => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        trHead.appendChild(th);
+    });
+    headEl.appendChild(trHead);
+
+    // Filas
+    dataRows.forEach(r => {
+        const tr = document.createElement("tr");
+
+        // marcar visualmente si tiene saldo pendiente
+        let pendiente = 0;
+        if (idx.faltaPagar >= 0) {
+            pendiente = Number((r[idx.faltaPagar] || "0").toString().replace(/[^0-9.-]/g, ""));
+        }
+        if (pendiente > 0) tr.classList.add("row-pendiente");
+
+        r.forEach(cell => {
+            const td = document.createElement("td");
+            td.textContent = (cell || "").toString();
+            tr.appendChild(td);
+        });
+
+        bodyEl.appendChild(tr);
+    });
 }
 
-function calcularPagos(data) {
-  const totalTeorico = data.invitados.reduce((acc, inv) => acc + inv.total, 0);
-  const seniaCobrada = data.invitados.reduce((acc, inv) => acc + inv.senia, 0);
-  const saldoPendiente = data.invitados.reduce((acc, inv) => acc + inv.saldo, 0);
-  const conSenia = data.invitados.filter((i) => i.senia > 0).length;
-  const porcentajeCubierto =
-    totalTeorico > 0 ? Math.round((seniaCobrada / totalTeorico) * 100) : 0;
-  return { seniaCobrada, saldoPendiente, conSenia, porcentajeCubierto };
-}
-
-// =============================
-// RENDER DE KPIs
-// =============================
-
-function renderKPIs() {
-  const inv = calcularResumenInvitados(eventData);
-  const fin = calcularFinanciero(eventData);
-  const pagos = calcularPagos(eventData);
-
-  // Fecha
-  const eventDateEl = document.getElementById("eventDate");
-  if (eventDateEl) eventDateEl.textContent = eventData.fecha;
-
-  // Invitados
-  document.getElementById("kpiTotalInvitados").textContent = inv.total;
-  document.getElementById("kpiFullPass").textContent = inv.full;
-  document.getElementById("kpiSoloCena").textContent = inv.noche;
-  document.getElementById("kpiPorcentajeFull").textContent =
-    inv.porcentajeFull + "%";
-
-  // Financieros
-  document.getElementById("kpiIngresos").textContent = formatMoney(fin.ingresos);
-  document.getElementById("kpiCostosFijos").textContent = formatMoney(
-    fin.costosFijos
-  );
-  document.getElementById("kpiCostosVariables").textContent = formatMoney(
-    fin.costosVariables
-  );
-  const resEl = document.getElementById("kpiResultado");
-  resEl.textContent = formatMoney(fin.resultado);
-  resEl.classList.toggle("positivo", fin.resultado >= 0);
-
-  // Pagos
-  document.getElementById("kpiSeniaCobrada").textContent = formatMoney(
-    pagos.seniaCobrada
-  );
-  document.getElementById("kpiSaldoPendiente").textContent = formatMoney(
-    pagos.saldoPendiente
-  );
-  document.getElementById("kpiConSenia").textContent = pagos.conSenia;
-  document.getElementById("kpiPorcentajeCubierto").textContent =
-    pagos.porcentajeCubierto + "%";
-}
-
-// =============================
-// TABLA INVITADOS + FILTROS
-// =============================
-
-function getEstado(inv) {
-  return inv.saldo <= 0 ? "Pagado" : "Pendiente";
-}
-
-function renderTablaInvitados() {
-  const tbody = document.getElementById("tablaInvitados");
-  const filterTipo = document.getElementById("filterTipo").value;
-  const filterPago = document.getElementById("filterPago").value;
-
-  tbody.innerHTML = "";
-
-  eventData.invitados.forEach((inv) => {
-    const estado = getEstado(inv);
-
-    if (filterTipo !== "todos" && inv.tipo !== filterTipo) return;
-    if (filterPago !== "todos" && estado !== filterPago) return;
-
-    const tr = document.createElement("tr");
-
-    const tdNombre = document.createElement("td");
-    tdNombre.textContent = inv.nombre;
-
-    const tdTipo = document.createElement("td");
-    tdTipo.textContent = inv.tipo;
-
-    const tdTotal = document.createElement("td");
-    tdTotal.textContent = formatMoney(inv.total);
-
-    const tdSenia = document.createElement("td");
-    tdSenia.textContent = formatMoney(inv.senia);
-
-    const tdSaldo = document.createElement("td");
-    tdSaldo.textContent = formatMoney(inv.saldo);
-
-    const tdEstado = document.createElement("td");
-    const spanEstado = document.createElement("span");
-    spanEstado.textContent = estado;
-    spanEstado.className =
-      "estado-pill " + (estado === "Pagado" ? "pagado" : "pendiente");
-    tdEstado.appendChild(spanEstado);
-
-    tr.appendChild(tdNombre);
-    tr.appendChild(tdTipo);
-    tr.appendChild(tdTotal);
-    tr.appendChild(tdSenia);
-    tr.appendChild(tdSaldo);
-    tr.appendChild(tdEstado);
-
-    tbody.appendChild(tr);
-  });
-}
-
-// =============================
-// INIT
-// =============================
-
-document.addEventListener("DOMContentLoaded", () => {
-  renderKPIs();
-  renderTablaInvitados();
-
-  document
-    .getElementById("filterTipo")
-    .addEventListener("change", renderTablaInvitados);
-  document
-    .getElementById("filterPago")
-    .addEventListener("change", renderTablaInvitados);
-});
+// Ejecutar al cargar la página
+document.addEventListener("DOMContentLoaded", renderPanel);
