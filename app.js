@@ -1,11 +1,14 @@
 // app.js
 // Dashboard Evento 14D – conectado a Google Sheets (solo lectura)
 
-// URL pública del CSV (hoja Invitados)
-const SHEET_CSV_URL =
+// URL pública del CSV (hojas publicadas)
+const INVITADOS_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0rZ8Ja0766QxpTGYCCWu0dz07Oz5YUqj9dS9bxhD8Snl7WPyRSfj6gsq0mozaoaUtuC_gCtbiTSvA/pub?gid=82462936&single=true&output=csv";
 
-// Elementos de la UI
+const COSTOS_CSV_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0rZ8Ja0766QxpTGYCCWu0dz07Oz5YUqj9dS9bxhD8Snl7WPyRSfj6gsq0mozaoaUtuC_gCtbiTSvA/pub?gid=2076354311&single=true&output=csv";
+
+// Elementos de la UI (Invitados)
 const kpiConfirmadosEl = document.getElementById("kpi-confirmados");
 const kpiFullPassEl = document.getElementById("kpi-fullpass");
 const kpiSoloCenaEl = document.getElementById("kpi-solo-cena");
@@ -20,7 +23,16 @@ const tablaBodyEl = document.getElementById("tabla-invitados-body");
 const reloadBtn = document.getElementById("reload-btn");
 const recordsCountEl = document.getElementById("records-count");
 
-let allRows = []; // todas las filas normalizadas
+// Elementos de la UI (Costos)
+const tablaCostosBodyEl = document.getElementById("tabla-costos-body");
+const recordsCostosCountEl = document.getElementById("records-costos-count");
+
+// Tabs
+const viewTabs = document.querySelectorAll(".view-tab");
+const viewInvitadosEl = document.querySelector(".view-invitados");
+const viewCostosEl = document.querySelector(".view-costos");
+
+let allRows = []; // todas las filas de invitados normalizadas
 
 // -------------------- Utils --------------------
 
@@ -39,12 +51,11 @@ function parseMoney(value) {
   const str = String(value).trim();
   if (!str) return 0;
 
-  // quitamos símbolo $, espacios y puntos de miles
   const clean = str
     .replace(/\$/g, "")
     .replace(/\s/g, "")
     .replace(/\./g, "")
-    .replace(",", "."); // si hubiera coma decimal
+    .replace(",", ".");
 
   const num = Number(clean);
   return isNaN(num) ? 0 : num;
@@ -81,7 +92,6 @@ function parseCSV(text) {
     const next = text[i + 1];
 
     if (char === '"' && insideQuotes && next === '"') {
-      // comillas escapadas ""
       value += '"';
       i++;
       continue;
@@ -111,7 +121,6 @@ function parseCSV(text) {
     value += char;
   }
 
-  // última celda/última fila
   if (value !== "" || current.length) {
     current.push(value);
     rows.push(current);
@@ -120,7 +129,7 @@ function parseCSV(text) {
   return rows;
 }
 
-// Convierte texto CSV en array de objetos normalizados
+// Convierte texto CSV en array de objetos normalizados (usando la primera fila como header)
 function csvToObjects(text) {
   const rawRows = parseCSV(text);
   if (!rawRows.length) return [];
@@ -139,18 +148,16 @@ function csvToObjects(text) {
     });
 }
 
-// -------------------- Datos y filtros --------------------
+// -------------------- Datos Invitados --------------------
 
-async function fetchData() {
-  const res = await fetch(SHEET_CSV_URL + "&t=" + Date.now()); // cache-buster
+async function fetchInvitados() {
+  const res = await fetch(INVITADOS_CSV_URL + "&t=" + Date.now());
   if (!res.ok) {
-    throw new Error("No se pudo leer la hoja de cálculo.");
+    throw new Error("No se pudo leer la hoja de Invitados.");
   }
   const text = await res.text();
   const rows = csvToObjects(text);
 
-  // Normalizamos nombres esperados
-  // (para evitar errores por cambios pequeños en los encabezados)
   return rows.map((r) => ({
     nombre: r.nombre || "",
     sector: r.sector || "",
@@ -170,7 +177,6 @@ function applyFilters() {
 
   const filtered = allRows.filter((row) => {
     const sector = (row.sector || "").trim();
-
     const cenaNum = Number(row.cena) || 0;
     const fullNum = Number(row.todoeldia) || 0;
 
@@ -183,7 +189,7 @@ function applyFilters() {
 
     // Estado de pago
     if (estadoPagoValue !== "todos") {
-      const estado = getEstadoPago(row); // pendiente, parcial, pagado
+      const estado = getEstadoPago(row);
       if (estado !== estadoPagoValue) return false;
     }
 
@@ -194,10 +200,9 @@ function applyFilters() {
   renderTable(filtered);
 }
 
-// -------------------- Render KPIs y tabla --------------------
+// -------------------- Render KPIs y tabla Invitados --------------------
 
 function renderKPIs(rows) {
-  // Sumamos personas, no filas
   const kpi = rows.reduce(
     (acc, row) => {
       const cenaNum = Number(row.cena) || 0;
@@ -280,7 +285,6 @@ function renderTable(rows) {
 function populateFilters() {
   if (!filterSectorEl) return;
 
-  // Sectores únicos
   const sectores = Array.from(
     new Set(
       allRows
@@ -302,7 +306,6 @@ function populateFilters() {
     filterSectorEl.appendChild(opt);
   });
 
-  // Tipo de pase (fijo)
   if (filterTipoPaseEl) {
     filterTipoPaseEl.innerHTML = "";
     const optT1 = document.createElement("option");
@@ -320,7 +323,6 @@ function populateFilters() {
     filterTipoPaseEl.appendChild(optT3);
   }
 
-  // Estado de pago (fijo)
   if (filterEstadoPagoEl) {
     filterEstadoPagoEl.innerHTML = "";
     const optE1 = document.createElement("option");
@@ -346,6 +348,99 @@ function populateFilters() {
   }
 }
 
+// -------------------- Datos Costos --------------------
+
+async function fetchCostos() {
+  const res = await fetch(COSTOS_CSV_URL + "&t=" + Date.now());
+  if (!res.ok) {
+    throw new Error("No se pudo leer la hoja de Costos.");
+  }
+  const text = await res.text();
+  const rows = parseCSV(text);
+  if (!rows.length) return [];
+
+  // Buscar la fila donde empieza la tabla de productos (primera celda == "Producto")
+  const headerIndex = rows.findIndex(
+    (r) => normalizeHeader(r[0] || "") === "producto"
+  );
+  if (headerIndex === -1) return [];
+
+  const headers = rows[headerIndex].map((h) => normalizeHeader(h || ""));
+  const dataRows = rows.slice(headerIndex + 1);
+
+  const objs = dataRows
+    .filter((r) => r.some((cell) => String(cell).trim() !== ""))
+    .map((cells) => {
+      const obj = {};
+      headers.forEach((h, idx) => {
+        obj[h] = cells[idx] !== undefined ? cells[idx] : "";
+      });
+      return obj;
+    });
+
+  return objs
+    .filter(
+      (o) =>
+        o.producto &&
+        o.producto.toLowerCase() !== "total" &&
+        o.producto.toLowerCase() !== "totales"
+    )
+    .map((o) => ({
+      producto: o.producto || "",
+      categoria: o.categoria || "",
+      cantidad: Number(o.cantidad || 0),
+      preciounidad: parseMoney(o.preciounidad),
+      preciofinal: parseMoney(o.preciofinal),
+      costoporpersona:
+        parseMoney(o.costoporperson) || parseMoney(o.costoporpersona),
+    }));
+}
+
+function renderTablaCostos(costos) {
+  if (!tablaCostosBodyEl) return;
+
+  tablaCostosBodyEl.innerHTML = "";
+
+  costos.forEach((item) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.producto || "-"}</td>
+      <td>${item.categoria || "-"}</td>
+      <td>${item.cantidad || 0}</td>
+      <td>${formatMoney(item.preciounidad || 0)}</td>
+      <td>${formatMoney(item.preciofinal || 0)}</td>
+      <td>${formatMoney(item.costoporpersona || 0)}</td>
+    `;
+    tablaCostosBodyEl.appendChild(tr);
+  });
+
+  if (recordsCostosCountEl) {
+    recordsCostosCountEl.textContent = `${costos.length} ítems`;
+  }
+}
+
+// -------------------- Tabs de vista --------------------
+
+function setupViewTabs() {
+  if (!viewTabs.length) return;
+
+  viewTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      viewTabs.forEach((t) => t.classList.remove("view-tab-active"));
+      tab.classList.add("view-tab-active");
+
+      const view = tab.dataset.view;
+      if (view === "costos") {
+        viewInvitadosEl?.classList.remove("active-view");
+        viewCostosEl?.classList.add("active-view");
+      } else {
+        viewCostosEl?.classList.remove("active-view");
+        viewInvitadosEl?.classList.add("active-view");
+      }
+    });
+  });
+}
+
 // -------------------- Init --------------------
 
 async function initDashboard() {
@@ -355,9 +450,14 @@ async function initDashboard() {
       reloadBtn.textContent = "Cargando...";
     }
 
-    allRows = await fetchData();
+    // Invitados
+    allRows = await fetchInvitados();
     populateFilters();
     applyFilters();
+
+    // Costos
+    const costos = await fetchCostos();
+    renderTablaCostos(costos);
   } catch (err) {
     console.error(err);
     alert("Hubo un problema al cargar los datos del evento.");
@@ -371,6 +471,7 @@ async function initDashboard() {
 
 // Eventos
 document.addEventListener("DOMContentLoaded", () => {
+  setupViewTabs();
   initDashboard();
 
   if (reloadBtn) {

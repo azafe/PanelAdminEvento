@@ -102,7 +102,7 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 18px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .kpi-card {
@@ -136,6 +136,50 @@ body {
 .kpi-value {
   font-size: 30px;
   font-weight: 700;
+}
+
+/* ---------- TABS / VISTAS ---------- */
+
+.view-tabs {
+  max-width: 1120px;
+  margin: 0 auto 18px auto;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0 1rem;
+}
+
+.view-tab {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 55%);
+  color: #e5e7eb;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.view-tab:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.view-tab-active {
+  background: linear-gradient(90deg, #2563EB, #06B6D4);
+  color: #f9fafb;
+  border-color: transparent;
+}
+
+/* Cada vista (Invitados / Costos) */
+.view-content {
+  display: none;
+}
+
+.view-content.active-view {
+  display: block;
 }
 
 /* ---------- CARDS GENERALES ---------- */
@@ -213,7 +257,7 @@ body {
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.6);
 }
 
-/* ---------- TABLA ---------- */
+/* ---------- TABLAS ---------- */
 .table-card {
   margin-top: 4px;
 }
@@ -337,6 +381,16 @@ body {
   .data-table td {
     padding: 8px;
     font-size: 12px;
+  }
+
+  .view-tabs {
+    padding: 0 0.75rem;
+    overflow-x: auto;
+  }
+
+  .view-tab {
+    white-space: nowrap;
+    font-size: 0.8rem;
   }
 }
 

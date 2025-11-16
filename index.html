@@ -58,74 +58,120 @@
       </article>
     </section>
 
-    <!-- FILTROS -->
-    <section class="card filters-card">
-      <div class="card-header">
-        <h2>Filtros</h2>
-        <p>Filtrá por sector, tipo de pase y estado de pago.</p>
-      </div>
-
-      <div class="filters-grid">
-        <div class="filter-group">
-          <label for="filter-sector" class="filter-label">Sector</label>
-          <select id="filter-sector" class="filter-select">
-            <option value="todos">Todos</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label for="filter-tipo-pase" class="filter-label">Tipo de pase</label>
-          <select id="filter-tipo-pase" class="filter-select">
-            <option value="todos">Todos</option>
-            <option value="full">Full Pass</option>
-            <option value="solo-cena">Solo Cena</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label for="filter-estado-pago" class="filter-label">Estado de pago</label>
-          <select id="filter-estado-pago" class="filter-select">
-            <option value="todos">Todos</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="parcial">Parcial</option>
-            <option value="pagado">Pagado</option>
-          </select>
-        </div>
-      </div>
+    <!-- TABS DE VISTA -->
+    <section class="view-tabs">
+      <button class="view-tab view-tab-active" data-view="invitados">
+        Invitados
+      </button>
+      <button class="view-tab" data-view="costos">
+        Costos
+      </button>
     </section>
 
-    <!-- TABLA INVITADOS -->
-    <section class="card table-card">
-      <div class="card-header">
-        <div>
-          <h2>Lista de Invitados</h2>
-          <p>Datos sincronizados desde Google Sheets.</p>
+    <!-- VISTA INVITADOS -->
+    <div class="view-content view-invitados active-view">
+      <!-- FILTROS -->
+      <section class="card filters-card">
+        <div class="card-header">
+          <h2>Filtros</h2>
+          <p>Filtrá por sector, tipo de pase y estado de pago.</p>
         </div>
-        <div class="records-counter">
-          <span id="records-count">0 registros</span>
-        </div>
-      </div>
 
-      <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Sector</th>
-              <th>Cena</th>
-              <th>Todo el día</th>
-              <th>Debe Pagar</th>
-              <th>Monto Pagado</th>
-              <th>Falta Pagar</th>
-              <th>Observaciones</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-invitados-body">
-            <!-- Filas generadas por app.js -->
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <div class="filters-grid">
+          <div class="filter-group">
+            <label for="filter-sector" class="filter-label">Sector</label>
+            <select id="filter-sector" class="filter-select">
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="filter-tipo-pase" class="filter-label">Tipo de pase</label>
+            <select id="filter-tipo-pase" class="filter-select">
+              <option value="todos">Todos</option>
+              <option value="full">Full Pass</option>
+              <option value="solo-cena">Solo Cena</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="filter-estado-pago" class="filter-label">Estado de pago</label>
+            <select id="filter-estado-pago" class="filter-select">
+              <option value="todos">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="parcial">Parcial</option>
+              <option value="pagado">Pagado</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- TABLA INVITADOS -->
+      <section class="card table-card table-card-invitados">
+        <div class="card-header">
+          <div>
+            <h2>Lista de Invitados</h2>
+            <p>Datos sincronizados desde Google Sheets.</p>
+          </div>
+          <div class="records-counter">
+            <span id="records-count">0 registros</span>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Sector</th>
+                <th>Cena</th>
+                <th>Todo el día</th>
+                <th>Debe Pagar</th>
+                <th>Monto Pagado</th>
+                <th>Falta Pagar</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-invitados-body">
+              <!-- Filas generadas por app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- VISTA COSTOS -->
+    <div class="view-content view-costos">
+      <section class="card table-card table-card-costos">
+        <div class="card-header">
+          <div>
+            <h2>Costos del Evento</h2>
+            <p>Datos sincronizados desde la pestaña “Costos” de Google Sheets.</p>
+          </div>
+          <div class="records-counter">
+            <span id="records-costos-count">0 ítems</span>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th>Cantidad</th>
+                <th>Precio Unidad</th>
+                <th>Precio Final</th>
+                <th>Costo por Persona</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-costos-body">
+              <!-- Filas generadas por app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
 
     <!-- FOOTER -->
     <footer class="footer">
