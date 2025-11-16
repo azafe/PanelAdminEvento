@@ -1,57 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Panel Evento 14D</title>
-  <link rel="stylesheet" href="admin.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Evento 14D – Aeropuerto Tucumán</title>
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="admin.css">
+
+    <!-- Fuente -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
-  <header class="topbar">
-    <h1>Panel Evento 14D – Aeropuerto Tucumán</h1>
-    <p>Dashboard conectado a Google Sheets (solo lectura)</p>
-  </header>
+    <header class="panel-header">
+        <h1 class="panel-title">Panel Evento 14D – Aeropuerto Tucumán</h1>
+        <p class="panel-subtitle">Dashboard conectado a Google Sheets (solo lectura)</p>
+    </header>
 
-  <main class="container">
     <!-- KPIs -->
-    <section class="kpi-grid">
-      <div class="kpi-card">
-        <span class="kpi-label">Invitados confirmados (personas)</span>
-        <span class="kpi-value" id="kpi-total-invitados">–</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-label">Full Pass</span>
-        <span class="kpi-value" id="kpi-full-pass">–</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-label">Solo Cena</span>
-        <span class="kpi-value" id="kpi-solo-cena">–</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-label">Recaudado</span>
-        <span class="kpi-value" id="kpi-recaudado">–</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-label">Pendiente de pago</span>
-        <span class="kpi-value pendiente" id="kpi-pendiente">–</span>
-      </div>
+    <section class="kpi-container">
+        <div class="kpi-card">
+            <p class="kpi-label">INVITADOS CONFIRMADOS (PERSONAS)</p>
+            <h2 class="kpi-value" id="kpiConfirmados">0</h2>
+        </div>
+
+        <div class="kpi-card">
+            <p class="kpi-label">FULL PASS</p>
+            <h2 class="kpi-value" id="kpiFullPass">0</h2>
+        </div>
+
+        <div class="kpi-card">
+            <p class="kpi-label">SOLO CENA</p>
+            <h2 class="kpi-value" id="kpiSoloCena">0</h2>
+        </div>
+
+        <div class="kpi-card">
+            <p class="kpi-label">RECAUDADO</p>
+            <h2 class="kpi-value" id="kpiRecaudado">$0</h2>
+        </div>
+
+        <div class="kpi-card kpi-alert">
+            <p class="kpi-label">PENDIENTE DE PAGO</p>
+            <h2 class="kpi-value" id="kpiPendiente">$0</h2>
+        </div>
     </section>
 
-    <!-- Tabla de invitados -->
-    <section class="card">
-      <div class="card-header">
-        <h2>Lista de Invitados</h2>
-        <p>Datos sincronizados desde Google Sheets.</p>
-      </div>
-      <div class="table-wrapper">
-        <table class="tabla">
-          <thead id="tabla-head"></thead>
-          <tbody id="tabla-body"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
+    <!-- Filtros -->
+    <section class="panel-card table-card">
+        <h2 class="panel-subtitle">Filtros</h2>
 
-  <script src="admin.js" defer></script>
+        <div class="filters">
+            <div class="filter-group">
+                <label for="filterSector">Sector</label>
+                <select id="filterSector">
+                    <option value="todos">Todos</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filterTipo">Tipo de Pase</label>
+                <select id="filterTipo">
+                    <option value="todos">Todos</option>
+                    <option value="full">Full Pass</option>
+                    <option value="cena">Solo Cena</option>
+                    <option value="ninguno">Sin pase asignado</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filterPago">Estado de Pago</label>
+                <select id="filterPago">
+                    <option value="todos">Todos</option>
+                    <option value="sin-deuda">Sin deuda</option>
+                    <option value="con-deuda">Con deuda</option>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <!-- Lista de Invitados -->
+    <section class="panel-card table-card">
+        <h2 class="panel-subtitle">Lista de Invitados</h2>
+        <p class="panel-description">Datos sincronizados desde Google Sheets.</p>
+
+        <div class="table-wrapper">
+            <table class="table-invitados" id="tablaInvitados">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Sector</th>
+                        <th>Confirmó?</th>
+                        <th>Total Personas</th>
+                        <th>Cena</th>
+                        <th>Todo el día</th>
+                        <th>Debe Pagar</th>
+                        <th>Monto Pagado</th>
+                        <th>Falta Pagar</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaBody">
+                    <!-- Filas dinámicas -->
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer class="panel-footer">
+        <p>panelevento.netlify.app</p>
+    </footer>
+
+    <!-- JS -->
+    <script src="admin.js"></script>
 </body>
 </html>
