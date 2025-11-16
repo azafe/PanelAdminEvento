@@ -4,10 +4,12 @@
   <meta charset="UTF-8" />
   <title>Panel Evento 14D – Aeropuerto Tucumán</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- IMPORTANTE: el archivo debe llamarse style.css -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app-shell">
+    <!-- TOPBAR -->
     <header class="topbar">
       <div class="topbar-left">
         <span class="topbar-icon">🏖️</span>
@@ -19,14 +21,14 @@
     </header>
 
     <main class="dashboard">
-      <!-- TÍTULO -->
+      <!-- HEADING -->
       <section class="heading">
         <h1>Panel Evento 14D – Aeropuerto Tucumán</h1>
         <p>Dashboard conectado a Google Sheets (solo lectura).</p>
         <button id="reloadBtn" class="ghost-button">Cargar datos de nuevo</button>
       </section>
 
-      <!-- KPIs -->
+      <!-- KPI CARDS -->
       <section class="kpi-grid">
         <article class="kpi-card">
           <div class="kpi-label">INVITADOS CONFIRMADOS (PERSONAS)</div>
@@ -90,7 +92,7 @@
         </div>
       </section>
 
-      <!-- TABLA -->
+      <!-- TABLA INVITADOS -->
       <section class="table-card">
         <div class="table-header">
           <h2>Lista de Invitados</h2>
@@ -129,6 +131,7 @@
     </main>
   </div>
 
+  <!-- IMPORTANTE: el archivo debe llamarse app.js -->
   <script src="app.js" defer></script>
 </body>
 </html>

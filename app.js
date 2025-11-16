@@ -1,11 +1,11 @@
-// URL del CSV público de Google Sheets
+// URL del CSV público de Google Sheets (hoja "Invitados")
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0rZ8Ja0766QxpTGYCCWu0dz07Oz5YUqj9dS9bxhD8Snl7WPyRSfj6gsq0mozaoaUtuC_gCtbiTSvA/pub?gid=82462936&single=true&output=csv";
 
 let allInvitados = [];
 let filteredInvitados = [];
 
-// Elements
+// Elementos del DOM
 const tablaBody = document.getElementById("tablaInvitados");
 const kpiTotal = document.getElementById("kpiTotalInvitados");
 const kpiFull = document.getElementById("kpiFullPass");
@@ -19,6 +19,7 @@ const filterPase = document.getElementById("filterPase");
 const filterPago = document.getElementById("filterPago");
 const reloadBtn = document.getElementById("reloadBtn");
 
+// Formateo de dinero
 const moneyFormatter = new Intl.NumberFormat("es-AR", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0
@@ -31,17 +32,14 @@ function formatMoney(num) {
 function parseMoney(str) {
   if (!str) return 0;
   let text = String(str).trim();
-  // quitar símbolos y espacios
-  text = text.replace(/[^\d.,-]/g, "");
-  // quitar puntos de miles
-  text = text.replace(/\./g, "");
-  // coma a punto
-  text = text.replace(",", ".");
+  text = text.replace(/[^\d.,-]/g, ""); // solo números, coma, punto
+  text = text.replace(/\./g, ""); // sacar puntos de miles
+  text = text.replace(",", "."); // coma -> punto
   const value = parseFloat(text);
   return isNaN(value) ? 0 : value;
 }
 
-// Parser CSV sencillo (soporta comillas)
+// Parser CSV simple (maneja comillas)
 function parseCSV(text) {
   const rows = [];
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
@@ -69,16 +67,16 @@ function parseCSV(text) {
   return rows;
 }
 
+// Carga de datos desde Google Sheets
 async function loadInvitados() {
-  const res = await fetch(CSV_URL);
-  const text = await res.text();
-  const rows = parseCSV(text);
+  try {
+    const res = await fetch(CSV_URL);
+    const text = await res.text();
+    const rows = parseCSV(text);
 
-  // Primera fila = encabezados
-  const dataRows = rows.slice(1);
+    const dataRows = rows.slice(1); // saltar encabezados
 
-  allInvitados = dataRows.map((row) => {
-    return {
+    allInvitados = dataRows.map((row) => ({
       nombre: row[0] || "",
       sector: row[1] || "",
       cena: Number(row[2] || 0),
@@ -87,22 +85,25 @@ async function loadInvitados() {
       montoPagado: parseMoney(row[5]),
       faltaPagar: parseMoney(row[6]),
       observaciones: row[7] || ""
-    };
-  });
+    }));
 
-  // Inicialmente, todos
-  filteredInvitados = [...allInvitados];
+    filteredInvitados = [...allInvitados];
 
-  buildSectorFilter();
-  renderEverything();
+    buildSectorFilter();
+    renderEverything();
+  } catch (err) {
+    console.error("Error cargando invitados:", err);
+  }
 }
 
-/* ====== FILTROS ====== */
+/* ===== FILTROS ===== */
 
 function buildSectorFilter() {
-  const sectors = Array.from(new Set(allInvitados.map((i) => i.sector).filter(Boolean))).sort();
+  const sectors = Array.from(
+    new Set(allInvitados.map((i) => i.sector).filter(Boolean))
+  ).sort();
 
-  // limpiar excepto "Todos"
+  // limpiar opciones excepto "Todos"
   while (filterSector.options.length > 1) {
     filterSector.remove(1);
   }
@@ -121,19 +122,27 @@ function applyFilters() {
   const pagoVal = filterPago.value;
 
   filteredInvitados = allInvitados.filter((inv) => {
-    // filtro sector
+    // Sector
     if (sectorVal !== "todos" && inv.sector !== sectorVal) return false;
 
-    // filtro tipo de pase
+    // Tipo de pase
     const isFull = inv.todoDia > 0;
     const isCenaSolo = inv.cena > 0 && inv.todoDia === 0;
 
     if (paseVal === "full" && !isFull) return false;
     if (paseVal === "cena" && !isCenaSolo) return false;
 
-    // filtro estado de pago
-    const pagado = inv.faltaPagar <= 0 && inv.montoPagado >= inv.debePagar && inv.debePagar > 0;
-    const pendiente = inv.montoPagado <= 0 && inv.faltaPagar >= inv.debePagar && inv.debePagar > 0;
+    // Estado de pago
+    const pagado =
+      inv.faltaPagar <= 0 &&
+      inv.montoPagado >= inv.debePagar &&
+      inv.debePagar > 0;
+
+    const pendiente =
+      inv.montoPagado <= 0 &&
+      inv.faltaPagar >= inv.debePagar &&
+      inv.debePagar > 0;
+
     const parcial =
       inv.montoPagado > 0 &&
       inv.montoPagado < inv.debePagar &&
@@ -147,11 +156,10 @@ function applyFilters() {
   });
 }
 
-/* ====== RENDER ====== */
+/* ===== RENDER ===== */
 
 function renderKPIs() {
   const totalInvitados = filteredInvitados.length;
-
   const fullPass = filteredInvitados.filter((i) => i.todoDia > 0).length;
   const soloCena = filteredInvitados.filter(
     (i) => i.cena > 0 && i.todoDia === 0
@@ -202,13 +210,10 @@ function renderEverything() {
   renderTable();
 }
 
-/* ====== EVENTOS ====== */
+/* ===== INICIO ===== */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // cargar datos
-  loadInvitados().catch((err) => {
-    console.error("Error cargando invitados:", err);
-  });
+  loadInvitados();
 
   [filterSector, filterPase, filterPago].forEach((el) => {
     el.addEventListener("change", () => {
@@ -218,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (reloadBtn) {
     reloadBtn.addEventListener("click", () => {
-      loadInvitados().catch((err) => console.error(err));
+      loadInvitados();
     });
   }
 });
