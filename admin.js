@@ -50,10 +50,17 @@ async function loadInvitados() {
 function findCol(headers, keyword) {
   const kw = keyword.toLowerCase();
   return headers.findIndex((h) =>
-    h.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(
-      kw
-    )
+    h.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(kw)
   );
+}
+
+// Parsear dinero en formato AR ($ 55.000,00 -> 55000)
+function parseMoneyAr(value) {
+  if (value === null || value === undefined) return 0;
+  const digits = value.toString().replace(/\D/g, ""); // solo dígitos
+  if (!digits) return 0;
+  // asumimos que los últimos 2 dígitos son centavos
+  return Number(digits) / 100;
 }
 
 async function renderPanel() {
@@ -63,11 +70,10 @@ async function renderPanel() {
   const headers = rows[0].map((h) => h.trim());
   const dataRows = rows.slice(1).filter((r) => (r[0] || "").trim() !== "");
 
-  // Índices detectados por palabra clave
   const idx = {
     nombre: findCol(headers, "nombre"),
     sector: findCol(headers, "sector"),
-    confirmo: findCol(headers, "confirm"), // si no existe, devuelve -1
+    confirmo: findCol(headers, "confirm"),
     totalPersonas: findCol(headers, "total personas"),
     cena: findCol(headers, "cena"),
     todoDia: findCol(headers, "todo el dia"),
@@ -77,17 +83,14 @@ async function renderPanel() {
     observaciones: findCol(headers, "observ"),
   };
 
-  // --- Filtro de confirmados ---
+  // --- Filas base: sólo confirmados si existe columna Confirmó ---
   let filasBase = dataRows;
-
   if (idx.confirmo >= 0) {
-    // si existe columna de Confirmó, filtramos por "si/sí"
     filasBase = dataRows.filter((r) => {
       const v = (r[idx.confirmo] || "").toString().toLowerCase();
       return v === "si" || v === "sí";
     });
   }
-  // si NO existe columna de Confirmó, usamos TODAS las filas como confirmadas
 
   // --- KPIs ---
   let totalInvitados = 0;
@@ -110,16 +113,12 @@ async function renderPanel() {
     totalInvitados += fullClean + cenaClean;
 
     const pagado =
-      idx.montoPagado >= 0
-        ? Number((r[idx.montoPagado] || "0").toString().replace(/[^0-9.-]/g, ""))
-        : 0;
+      idx.montoPagado >= 0 ? parseMoneyAr(r[idx.montoPagado]) : 0;
     const falta =
-      idx.faltaPagar >= 0
-        ? Number((r[idx.faltaPagar] || "0").toString().replace(/[^0-9.-]/g, ""))
-        : 0;
+      idx.faltaPagar >= 0 ? parseMoneyAr(r[idx.faltaPagar]) : 0;
 
-    totalRecaudado += isNaN(pagado) ? 0 : pagado;
-    totalPendiente += isNaN(falta) ? 0 : falta;
+    totalRecaudado += pagado;
+    totalPendiente += falta;
   });
 
   const fmtMoney = (n) =>
@@ -142,7 +141,6 @@ async function renderPanel() {
   headEl.innerHTML = "";
   bodyEl.innerHTML = "";
 
-  // Encabezados
   const trHead = document.createElement("tr");
   headers.forEach((h) => {
     const th = document.createElement("th");
@@ -151,19 +149,14 @@ async function renderPanel() {
   });
   headEl.appendChild(trHead);
 
-  // Filas
   dataRows.forEach((r) => {
     const tr = document.createElement("tr");
 
     let pendiente = 0;
     if (idx.faltaPagar >= 0) {
-      pendiente = Number(
-        (r[idx.faltaPagar] || "0").toString().replace(/[^0-9.-]/g, "")
-      );
+      pendiente = parseMoneyAr(r[idx.faltaPagar]);
     }
-    if (!isNaN(pendiente) && pendiente > 0) {
-      tr.classList.add("row-pendiente");
-    }
+    if (pendiente > 0) tr.classList.add("row-pendiente");
 
     r.forEach((cell) => {
       const td = document.createElement("td");
