@@ -1,167 +1,224 @@
-// URL pública CSV de tu hoja "Invitados"
-const SHEET_URL =
+// URL del CSV público de Google Sheets
+const CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0rZ8Ja0766QxpTGYCCWu0dz07Oz5YUqj9dS9bxhD8Snl7WPyRSfj6gsq0mozaoaUtuC_gCtbiTSvA/pub?gid=82462936&single=true&output=csv";
 
-let invitados = [];
+let allInvitados = [];
+let filteredInvitados = [];
 
-document.addEventListener("DOMContentLoaded", () => {
-  cargarDatos();
+// Elements
+const tablaBody = document.getElementById("tablaInvitados");
+const kpiTotal = document.getElementById("kpiTotalInvitados");
+const kpiFull = document.getElementById("kpiFullPass");
+const kpiCena = document.getElementById("kpiSoloCena");
+const kpiRecaudado = document.getElementById("kpiRecaudado");
+const kpiPendiente = document.getElementById("kpiPendiente");
+const tableCount = document.getElementById("tableCount");
 
-  document.getElementById("filterSector").addEventListener("change", render);
-  document.getElementById("filterTipoPase").addEventListener("change", render);
-  document.getElementById("filterEstadoPago").addEventListener("change", render);
+const filterSector = document.getElementById("filterSector");
+const filterPase = document.getElementById("filterPase");
+const filterPago = document.getElementById("filterPago");
+const reloadBtn = document.getElementById("reloadBtn");
+
+const moneyFormatter = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0
 });
 
-async function cargarDatos() {
-  try {
-    const resp = await fetch(SHEET_URL);
-    const text = await resp.text();
-
-    // Google en ES suele separar por ";"
-    const filas = text.trim().split("\n").map((r) => r.split(";"));
-    const encabezados = filas[0];
-    const data = filas.slice(1).filter((row) => row[0] && row[0].trim() !== "");
-
-    const idx = {
-      nombre: encabezados.indexOf("Nombre"),
-      sector: encabezados.indexOf("Sector"),
-      confirmo: encabezados.indexOf("Confirmó"),
-      totalPersonas: encabezados.indexOf("Total Personas"),
-      cena: encabezados.indexOf("Cena"),
-      todoDia: encabezados.indexOf("Todo el día"),
-      debePagar: encabezados.indexOf("Debe Pagar"),
-      montoPagado: encabezados.indexOf("Monto Pagado"),
-      faltaPagar: encabezados.indexOf("Falta Pagar"),
-      observaciones: encabezados.indexOf("Observaciones"),
-    };
-
-    invitados = data.map((row) => ({
-      nombre: row[idx.nombre] || "",
-      sector: row[idx.sector] || "",
-      confirmo: (row[idx.confirmo] || "").toLowerCase() === "si",
-      totalPersonas: parseInt(row[idx.totalPersonas] || "0", 10) || 0,
-      cena: parseInt(row[idx.cena] || "0", 10) || 0,
-      todoDia: parseInt(row[idx.todoDia] || "0", 10) || 0,
-      debePagar: parseMoney(row[idx.debePagar]),
-      montoPagado: parseMoney(row[idx.montoPagado]),
-      faltaPagar: parseMoney(row[idx.faltaPagar]),
-      observaciones: row[idx.observaciones] || "",
-    }));
-
-    poblarFiltros();
-    render();
-  } catch (e) {
-    console.error("Error cargando datos:", e);
-  }
+function formatMoney(num) {
+  return "$ " + moneyFormatter.format(Math.round(num || 0));
 }
 
 function parseMoney(str) {
   if (!str) return 0;
-  const limpio = str.replace(/[^\d]/g, "");
-  return limpio ? parseInt(limpio, 10) : 0;
+  let text = String(str).trim();
+  // quitar símbolos y espacios
+  text = text.replace(/[^\d.,-]/g, "");
+  // quitar puntos de miles
+  text = text.replace(/\./g, "");
+  // coma a punto
+  text = text.replace(",", ".");
+  const value = parseFloat(text);
+  return isNaN(value) ? 0 : value;
 }
 
-function formatMoney(n) {
-  return "$ " + n.toLocaleString("es-AR");
+// Parser CSV sencillo (soporta comillas)
+function parseCSV(text) {
+  const rows = [];
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+
+  for (const line of lines) {
+    const cells = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        cells.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    cells.push(current);
+    rows.push(cells.map((c) => c.trim()));
+  }
+
+  return rows;
 }
 
-function poblarFiltros() {
-  const selectSector = document.getElementById("filterSector");
-  const sectores = Array.from(new Set(invitados.map((i) => i.sector).filter(Boolean))).sort();
+async function loadInvitados() {
+  const res = await fetch(CSV_URL);
+  const text = await res.text();
+  const rows = parseCSV(text);
 
-  sectores.forEach((s) => {
+  // Primera fila = encabezados
+  const dataRows = rows.slice(1);
+
+  allInvitados = dataRows.map((row) => {
+    return {
+      nombre: row[0] || "",
+      sector: row[1] || "",
+      cena: Number(row[2] || 0),
+      todoDia: Number(row[3] || 0),
+      debePagar: parseMoney(row[4]),
+      montoPagado: parseMoney(row[5]),
+      faltaPagar: parseMoney(row[6]),
+      observaciones: row[7] || ""
+    };
+  });
+
+  // Inicialmente, todos
+  filteredInvitados = [...allInvitados];
+
+  buildSectorFilter();
+  renderEverything();
+}
+
+/* ====== FILTROS ====== */
+
+function buildSectorFilter() {
+  const sectors = Array.from(new Set(allInvitados.map((i) => i.sector).filter(Boolean))).sort();
+
+  // limpiar excepto "Todos"
+  while (filterSector.options.length > 1) {
+    filterSector.remove(1);
+  }
+
+  sectors.forEach((sector) => {
     const opt = document.createElement("option");
-    opt.value = s;
-    opt.textContent = s;
-    selectSector.appendChild(opt);
+    opt.value = sector;
+    opt.textContent = sector;
+    filterSector.appendChild(opt);
   });
 }
 
-function render() {
-  const sectorSel = document.getElementById("filterSector").value;
-  const tipoSel = document.getElementById("filterTipoPase").value;
-  const estadoSel = document.getElementById("filterEstadoPago").value;
+function applyFilters() {
+  const sectorVal = filterSector.value;
+  const paseVal = filterPase.value;
+  const pagoVal = filterPago.value;
 
-  let lista = [...invitados];
+  filteredInvitados = allInvitados.filter((inv) => {
+    // filtro sector
+    if (sectorVal !== "todos" && inv.sector !== sectorVal) return false;
 
-  if (sectorSel !== "Todos") {
-    lista = lista.filter((i) => i.sector === sectorSel);
-  }
+    // filtro tipo de pase
+    const isFull = inv.todoDia > 0;
+    const isCenaSolo = inv.cena > 0 && inv.todoDia === 0;
 
-  if (tipoSel !== "Todos") {
-    lista = lista.filter((i) => {
-      const esFull = i.todoDia > 0;
-      const esCenaOnly = i.cena > 0 && i.todoDia === 0;
-      if (tipoSel === "Full Pass") return esFull;
-      if (tipoSel === "Solo Cena") return esCenaOnly;
-      return true;
-    });
-  }
+    if (paseVal === "full" && !isFull) return false;
+    if (paseVal === "cena" && !isCenaSolo) return false;
 
-  if (estadoSel !== "Todos") {
-    lista = lista.filter((i) => {
-      const alDia = i.faltaPagar === 0;
-      if (estadoSel === "Al día") return alDia;
-      if (estadoSel === "Con saldo") return !alDia;
-      return true;
-    });
-  }
+    // filtro estado de pago
+    const pagado = inv.faltaPagar <= 0 && inv.montoPagado >= inv.debePagar && inv.debePagar > 0;
+    const pendiente = inv.montoPagado <= 0 && inv.faltaPagar >= inv.debePagar && inv.debePagar > 0;
+    const parcial =
+      inv.montoPagado > 0 &&
+      inv.montoPagado < inv.debePagar &&
+      inv.faltaPagar > 0;
 
-  renderTabla(lista);
-  renderKpis(); // KPIs siempre con el total global
+    if (pagoVal === "pagado" && !pagado) return false;
+    if (pagoVal === "pendiente" && !pendiente) return false;
+    if (pagoVal === "parcial" && !parcial) return false;
+
+    return true;
+  });
 }
 
-function renderTabla(lista) {
-  const tbody = document.getElementById("tablaInvitados");
-  tbody.innerHTML = "";
+/* ====== RENDER ====== */
 
-  lista.forEach((i) => {
+function renderKPIs() {
+  const totalInvitados = filteredInvitados.length;
+
+  const fullPass = filteredInvitados.filter((i) => i.todoDia > 0).length;
+  const soloCena = filteredInvitados.filter(
+    (i) => i.cena > 0 && i.todoDia === 0
+  ).length;
+
+  const recaudado = filteredInvitados.reduce(
+    (sum, i) => sum + i.montoPagado,
+    0
+  );
+  const pendiente = filteredInvitados.reduce(
+    (sum, i) => sum + i.faltaPagar,
+    0
+  );
+
+  kpiTotal.textContent = totalInvitados;
+  kpiFull.textContent = fullPass;
+  kpiCena.textContent = soloCena;
+  kpiRecaudado.textContent = formatMoney(recaudado);
+  kpiPendiente.textContent = formatMoney(pendiente);
+}
+
+function renderTable() {
+  tablaBody.innerHTML = "";
+
+  filteredInvitados.forEach((i) => {
     const tr = document.createElement("tr");
-
-    const estadoPago = i.faltaPagar === 0 ? "Al día" : "Con saldo";
-
     tr.innerHTML = `
       <td>${i.nombre}</td>
       <td>${i.sector}</td>
-      <td>${i.confirmo ? "Sí" : "No"}</td>
-      <td>${i.totalPersonas}</td>
-      <td>${i.cena}</td>
-      <td>${i.todoDia}</td>
+      <td>${i.cena || ""}</td>
+      <td>${i.todoDia || ""}</td>
       <td>${formatMoney(i.debePagar)}</td>
       <td>${formatMoney(i.montoPagado)}</td>
       <td>${formatMoney(i.faltaPagar)}</td>
-      <td>${i.observaciones || ""}</td>
+      <td>${i.observaciones}</td>
     `;
-
-    tbody.appendChild(tr);
+    tablaBody.appendChild(tr);
   });
+
+  tableCount.textContent = `${filteredInvitados.length} registro${
+    filteredInvitados.length === 1 ? "" : "s"
+  }`;
 }
 
-function renderKpis() {
-  // KPIs con TODOS los confirmados
-  const confirmados = invitados.filter((i) => i.confirmo);
-
-  const personasConfirmadas = confirmados.reduce(
-    (acc, i) => acc + (i.totalPersonas || 0),
-    0
-  );
-  const fullPass = confirmados.reduce((acc, i) => acc + (i.todoDia || 0), 0);
-  const soloCena = confirmados.reduce(
-    (acc, i) => acc + (i.cena || 0),
-    0
-  );
-  const recaudado = confirmados.reduce(
-    (acc, i) => acc + (i.montoPagado || 0),
-    0
-  );
-  const pendiente = confirmados.reduce(
-    (acc, i) => acc + (i.faltaPagar || 0),
-    0
-  );
-
-  document.getElementById("kpiConfirmados").textContent = personasConfirmadas;
-  document.getElementById("kpiFullPass").textContent = fullPass;
-  document.getElementById("kpiSoloCena").textContent = soloCena;
-  document.getElementById("kpiRecaudado").textContent = formatMoney(recaudado);
-  document.getElementById("kpiPendiente").textContent = formatMoney(pendiente);
+function renderEverything() {
+  applyFilters();
+  renderKPIs();
+  renderTable();
 }
+
+/* ====== EVENTOS ====== */
+
+document.addEventListener("DOMContentLoaded", () => {
+  // cargar datos
+  loadInvitados().catch((err) => {
+    console.error("Error cargando invitados:", err);
+  });
+
+  [filterSector, filterPase, filterPago].forEach((el) => {
+    el.addEventListener("change", () => {
+      renderEverything();
+    });
+  });
+
+  if (reloadBtn) {
+    reloadBtn.addEventListener("click", () => {
+      loadInvitados().catch((err) => console.error(err));
+    });
+  }
+});
