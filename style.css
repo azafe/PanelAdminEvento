@@ -271,22 +271,113 @@ tbody td:nth-child(7) {
   text-align: center;
 }
 
-/* ===== RESPONSIVE ===== */
+/* ===== RESPONSIVE MOBILE ===== */
 @media (max-width: 768px) {
   .dashboard {
-    padding: 80px 10px 24px;
+    padding: 72px 10px 20px;
   }
 
+  .heading {
+    margin-bottom: 16px;
+  }
+
+  .heading h1 {
+    font-size: 18px;
+  }
+
+  .heading p {
+    font-size: 12px;
+  }
+
+  .ghost-button {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  /* KPI cards: 1 por fila, más compactos */
   .kpi-grid {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
-  .filters-card,
+  .kpi-card {
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+
+  .kpi-label {
+    font-size: 10px;
+  }
+
+  .kpi-value {
+    font-size: 22px;
+  }
+
+  /* Filtros */
+  .filters-card {
+    padding: 12px 10px 14px;
+    border-radius: 16px;
+  }
+
+  .filters-header h2 {
+    font-size: 14px;
+  }
+
+  .filters-header p {
+    font-size: 12px;
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .filter-group label {
+    font-size: 10px;
+  }
+
+  .filter-group select {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* Tabla */
   .table-card {
-    padding: 14px 12px;
+    padding: 12px 10px;
+    border-radius: 18px;
+  }
+
+  .table-header h2 {
+    font-size: 14px;
+  }
+
+  .table-header p {
+    font-size: 12px;
   }
 
   .table-wrapper {
-    border-radius: 14px;
+    margin-top: 8px;
+    border-radius: 12px;
+  }
+
+  table {
+    min-width: 600px;      /* para que no se deforme */
+  }
+
+  thead th {
+    padding: 8px 8px;
+    font-size: 10px;
+  }
+
+  tbody td {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .table-footer {
+    font-size: 11px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
 }
