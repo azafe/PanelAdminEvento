@@ -4,134 +4,136 @@
   <meta charset="UTF-8" />
   <title>Panel Evento 14D – Aeropuerto Tucumán</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- IMPORTANTE: el archivo debe llamarse style.css -->
-  <link rel="stylesheet" href="style.css" />
+
+  <!-- Estilos principales -->
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <!-- TOPBAR -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <span class="topbar-icon">🏖️</span>
-        <span class="topbar-title">Panel Evento 14D</span>
+  <div class="page-wrapper">
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo-pill">
+          <span class="logo-emoji">🏖️</span>
+          <span class="logo-text">Panel Evento 14D</span>
+        </div>
+        <div class="header-subtitle">
+          Dashboard conectado a Google Sheets (solo lectura).
+        </div>
       </div>
-      <div class="topbar-right">
-        <span class="topbar-pill">Aeropuerto Tucumán</span>
+
+      <div class="header-right">
+        <span class="badge-location">Aeropuerto Tucumán</span>
+        <button id="reload-btn" class="btn-outline">
+          Cargar datos de nuevo
+        </button>
       </div>
     </header>
 
-    <main class="dashboard">
-      <!-- HEADING -->
-      <section class="heading">
-        <h1>Panel Evento 14D – Aeropuerto Tucumán</h1>
-        <p>Dashboard conectado a Google Sheets (solo lectura).</p>
-        <button id="reloadBtn" class="ghost-button">Cargar datos de nuevo</button>
-      </section>
+    <!-- KPIs -->
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <div class="kpi-label">INVITADOS CONFIRMADOS (PERSONAS)</div>
+        <div class="kpi-value" id="kpi-confirmados">0</div>
+      </article>
 
-      <!-- KPI CARDS -->
-      <section class="kpi-grid">
-        <article class="kpi-card">
-          <div class="kpi-label">INVITADOS CONFIRMADOS (PERSONAS)</div>
-          <div id="kpiTotalInvitados" class="kpi-value">0</div>
-        </article>
+      <article class="kpi-card">
+        <div class="kpi-label">FULL PASS</div>
+        <div class="kpi-value" id="kpi-fullpass">0</div>
+      </article>
 
-        <article class="kpi-card">
-          <div class="kpi-label">FULL PASS</div>
-          <div id="kpiFullPass" class="kpi-value">0</div>
-        </article>
+      <article class="kpi-card">
+        <div class="kpi-label">SOLO CENA</div>
+        <div class="kpi-value" id="kpi-solo-cena">0</div>
+      </article>
 
-        <article class="kpi-card">
-          <div class="kpi-label">SOLO CENA</div>
-          <div id="kpiSoloCena" class="kpi-value">0</div>
-        </article>
+      <article class="kpi-card">
+        <div class="kpi-label">RECAUDADO</div>
+        <div class="kpi-value" id="kpi-recaudado">$ 0</div>
+      </article>
 
-        <article class="kpi-card">
-          <div class="kpi-label">RECAUDADO</div>
-          <div id="kpiRecaudado" class="kpi-value kpi-money">$ 0</div>
-        </article>
+      <article class="kpi-card kpi-card-alert">
+        <div class="kpi-label">PENDIENTE DE PAGO</div>
+        <div class="kpi-value" id="kpi-pendiente">$ 0</div>
+      </article>
+    </section>
 
-        <article class="kpi-card kpi-card-danger">
-          <div class="kpi-label">PENDIENTE DE PAGO</div>
-          <div id="kpiPendiente" class="kpi-value kpi-money">$ 0</div>
-        </article>
-      </section>
+    <!-- FILTROS -->
+    <section class="card filters-card">
+      <div class="card-header">
+        <h2>Filtros</h2>
+        <p>Filtrá por sector, tipo de pase y estado de pago.</p>
+      </div>
 
-      <!-- FILTROS -->
-      <section class="filters-card">
-        <div class="filters-header">
-          <h2>Filtros</h2>
-          <p>Filtrá por sector, tipo de pase y estado de pago.</p>
+      <div class="filters-grid">
+        <div class="filter-group">
+          <label for="filter-sector" class="filter-label">Sector</label>
+          <select id="filter-sector" class="filter-select">
+            <option value="todos">Todos</option>
+          </select>
         </div>
 
-        <div class="filters-grid">
-          <div class="filter-group">
-            <label for="filterSector">Sector</label>
-            <select id="filterSector">
-              <option value="todos">Todos</option>
-            </select>
-          </div>
-
-          <div class="filter-group">
-            <label for="filterPase">Tipo de pase</label>
-            <select id="filterPase">
-              <option value="todos">Todos</option>
-              <option value="full">Full Pass</option>
-              <option value="cena">Solo Cena</option>
-            </select>
-          </div>
-
-          <div class="filter-group">
-            <label for="filterPago">Estado de pago</label>
-            <select id="filterPago">
-              <option value="todos">Todos</option>
-              <option value="pagado">Pagado</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="parcial">Pago parcial</option>
-            </select>
-          </div>
+        <div class="filter-group">
+          <label for="filter-tipo-pase" class="filter-label">Tipo de pase</label>
+          <select id="filter-tipo-pase" class="filter-select">
+            <option value="todos">Todos</option>
+            <option value="full">Full Pass</option>
+            <option value="solo-cena">Solo Cena</option>
+          </select>
         </div>
-      </section>
 
-      <!-- TABLA INVITADOS -->
-      <section class="table-card">
-        <div class="table-header">
+        <div class="filter-group">
+          <label for="filter-estado-pago" class="filter-label">Estado de pago</label>
+          <select id="filter-estado-pago" class="filter-select">
+            <option value="todos">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="parcial">Parcial</option>
+            <option value="pagado">Pagado</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- TABLA INVITADOS -->
+    <section class="card table-card">
+      <div class="card-header">
+        <div>
           <h2>Lista de Invitados</h2>
           <p>Datos sincronizados desde Google Sheets.</p>
         </div>
-
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Sector</th>
-                <th>Cena</th>
-                <th>Todo el día</th>
-                <th>Debe Pagar</th>
-                <th>Monto Pagado</th>
-                <th>Falta Pagar</th>
-                <th>Observaciones</th>
-              </tr>
-            </thead>
-            <tbody id="tablaInvitados">
-              <!-- Filas dinámicas -->
-            </tbody>
-          </table>
+        <div class="records-counter">
+          <span id="records-count">0 registros</span>
         </div>
+      </div>
 
-        <div class="table-footer">
-          <span id="tableCount">0 registros</span>
-        </div>
-      </section>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Sector</th>
+              <th>Cena</th>
+              <th>Todo el día</th>
+              <th>Debe Pagar</th>
+              <th>Monto Pagado</th>
+              <th>Falta Pagar</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-invitados-body">
+            <!-- Filas generadas por app.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-      <!-- FOOTER -->
-      <footer class="footer">
-        <span>panelevento.netlify.app · Evento 14D</span>
-      </footer>
-    </main>
+    <!-- FOOTER -->
+    <footer class="footer">
+      <span>panelevento.netlify.app · Evento 14D</span>
+    </footer>
   </div>
 
-  <!-- IMPORTANTE: el archivo debe llamarse app.js -->
-  <script src="app.js" defer></script>
+  <!-- Script principal -->
+  <script src="app.js"></script>
 </body>
 </html>
