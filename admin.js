@@ -46,6 +46,16 @@ async function loadInvitados() {
   return parseCSV(text);
 }
 
+// Busca columna por palabra clave (ignora may/min y acentos simples)
+function findCol(headers, keyword) {
+  const kw = keyword.toLowerCase();
+  return headers.findIndex((h) =>
+    h.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(
+      kw
+    )
+  );
+}
+
 async function renderPanel() {
   const rows = await loadInvitados();
   if (!rows || rows.length === 0) return;
@@ -53,28 +63,31 @@ async function renderPanel() {
   const headers = rows[0].map((h) => h.trim());
   const dataRows = rows.slice(1).filter((r) => (r[0] || "").trim() !== "");
 
-  // Índices según encabezados de tu hoja
+  // Índices detectados por palabra clave
   const idx = {
-    nombre: headers.indexOf("Nombre"),
-    sector: headers.indexOf("Sector"),
-    confirmo: headers.indexOf("Confirmó"),
-    totalPersonas: headers.indexOf("Total Personas"),
-    cena: headers.indexOf("Cena"),
-    todoDia: headers.indexOf("Todo el día"),
-    debePagar: headers.indexOf("Debe Pagar"),
-    montoPagado: headers.indexOf("Monto Pagado"),
-    faltaPagar: headers.indexOf("Falta Pagar"),
-    observaciones: headers.indexOf("Observaciones"),
+    nombre: findCol(headers, "nombre"),
+    sector: findCol(headers, "sector"),
+    confirmo: findCol(headers, "confirm"), // si no existe, devuelve -1
+    totalPersonas: findCol(headers, "total personas"),
+    cena: findCol(headers, "cena"),
+    todoDia: findCol(headers, "todo el dia"),
+    debePagar: findCol(headers, "debe pagar"),
+    montoPagado: findCol(headers, "monto pagado"),
+    faltaPagar: findCol(headers, "falta pagar"),
+    observaciones: findCol(headers, "observ"),
   };
 
-  // --- Filtros: solo confirmados ---
-  const confirmados = dataRows.filter((r) => {
-    const v =
-      idx.confirmo >= 0
-        ? (r[idx.confirmo] || "").toString().toLowerCase()
-        : "";
-    return v === "si" || v === "sí";
-  });
+  // --- Filtro de confirmados ---
+  let filasBase = dataRows;
+
+  if (idx.confirmo >= 0) {
+    // si existe columna de Confirmó, filtramos por "si/sí"
+    filasBase = dataRows.filter((r) => {
+      const v = (r[idx.confirmo] || "").toString().toLowerCase();
+      return v === "si" || v === "sí";
+    });
+  }
+  // si NO existe columna de Confirmó, usamos TODAS las filas como confirmadas
 
   // --- KPIs ---
   let totalInvitados = 0;
@@ -83,13 +96,18 @@ async function renderPanel() {
   let totalRecaudado = 0;
   let totalPendiente = 0;
 
-  confirmados.forEach((r) => {
-    const full = idx.todoDia >= 0 ? Number(r[idx.todoDia] || 0) : 0;
-    const cena = idx.cena >= 0 ? Number(r[idx.cena] || 0) : 0;
+  filasBase.forEach((r) => {
+    const full =
+      idx.todoDia >= 0 ? Number((r[idx.todoDia] || "0").toString().replace(",", ".")) : 0;
+    const cena =
+      idx.cena >= 0 ? Number((r[idx.cena] || "0").toString().replace(",", ".")) : 0;
 
-    totalFullPass += isNaN(full) ? 0 : full;
-    totalSoloCena += isNaN(cena) ? 0 : cena;
-    totalInvitados += (isNaN(full) ? 0 : full) + (isNaN(cena) ? 0 : cena);
+    const fullClean = isNaN(full) ? 0 : full;
+    const cenaClean = isNaN(cena) ? 0 : cena;
+
+    totalFullPass += fullClean;
+    totalSoloCena += cenaClean;
+    totalInvitados += fullClean + cenaClean;
 
     const pagado =
       idx.montoPagado >= 0
