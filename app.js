@@ -1,229 +1,384 @@
-// URL del CSV público de Google Sheets (hoja "Invitados")
-const CSV_URL =
+// app.js
+// Dashboard Evento 14D – conectado a Google Sheets (solo lectura)
+
+// URL pública del CSV (hoja Invitados)
+const SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0rZ8Ja0766QxpTGYCCWu0dz07Oz5YUqj9dS9bxhD8Snl7WPyRSfj6gsq0mozaoaUtuC_gCtbiTSvA/pub?gid=82462936&single=true&output=csv";
 
-let allInvitados = [];
-let filteredInvitados = [];
+// Elementos de la UI
+const kpiConfirmadosEl = document.getElementById("kpi-confirmados");
+const kpiFullPassEl = document.getElementById("kpi-fullpass");
+const kpiSoloCenaEl = document.getElementById("kpi-solo-cena");
+const kpiRecaudadoEl = document.getElementById("kpi-recaudado");
+const kpiPendienteEl = document.getElementById("kpi-pendiente");
 
-// Elementos del DOM
-const tablaBody = document.getElementById("tablaInvitados");
-const kpiTotal = document.getElementById("kpiTotalInvitados");
-const kpiFull = document.getElementById("kpiFullPass");
-const kpiCena = document.getElementById("kpiSoloCena");
-const kpiRecaudado = document.getElementById("kpiRecaudado");
-const kpiPendiente = document.getElementById("kpiPendiente");
-const tableCount = document.getElementById("tableCount");
+const filterSectorEl = document.getElementById("filter-sector");
+const filterTipoPaseEl = document.getElementById("filter-tipo-pase");
+const filterEstadoPagoEl = document.getElementById("filter-estado-pago");
 
-const filterSector = document.getElementById("filterSector");
-const filterPase = document.getElementById("filterPase");
-const filterPago = document.getElementById("filterPago");
-const reloadBtn = document.getElementById("reloadBtn");
+const tablaBodyEl = document.getElementById("tabla-invitados-body");
+const reloadBtn = document.getElementById("reload-btn");
+const recordsCountEl = document.getElementById("records-count");
 
-// Formateo de dinero
-const moneyFormatter = new Intl.NumberFormat("es-AR", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0
-});
+let allRows = []; // todas las filas normalizadas
 
-function formatMoney(num) {
-  return "$ " + moneyFormatter.format(Math.round(num || 0));
+// -------------------- Utils --------------------
+
+// Normaliza encabezados: "Todo el día" -> "todoeldia"
+function normalizeHeader(header) {
+  return header
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
-function parseMoney(str) {
+// Convierte string de dinero en número (ej: "65.000,00" -> 65000)
+function parseMoney(value) {
+  if (value === null || value === undefined) return 0;
+  const str = String(value).trim();
   if (!str) return 0;
-  let text = String(str).trim();
-  text = text.replace(/[^\d.,-]/g, ""); // solo números, coma, punto
-  text = text.replace(/\./g, ""); // sacar puntos de miles
-  text = text.replace(",", "."); // coma -> punto
-  const value = parseFloat(text);
-  return isNaN(value) ? 0 : value;
+
+  // quitamos símbolo $, espacios y puntos de miles
+  const clean = str
+    .replace(/\$/g, "")
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(",", "."); // si hubiera coma decimal
+
+  const num = Number(clean);
+  return isNaN(num) ? 0 : num;
 }
 
-// Parser CSV simple (maneja comillas)
+// Formatea número a $ 182.500
+function formatMoney(num) {
+  const n = Number(num) || 0;
+  return `$ ${n.toLocaleString("es-AR")}`;
+}
+
+// Determina estado de pago a partir de MontoPagado y FaltaPagar
+function getEstadoPago(row) {
+  const pagado = parseMoney(row.montopagado);
+  const falta = parseMoney(row.faltapagar);
+
+  if (pagado <= 0 && falta > 0) return "pendiente";
+  if (pagado > 0 && falta > 0) return "parcial";
+  if (pagado > 0 && falta <= 0) return "pagado";
+  return "pendiente";
+}
+
+// -------------------- CSV Parser --------------------
+
+// Parser simple de CSV que respeta comillas
 function parseCSV(text) {
   const rows = [];
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+  let current = [];
+  let value = "";
+  let insideQuotes = false;
 
-  for (const line of lines) {
-    const cells = [];
-    let current = "";
-    let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
 
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === "," && !inQuotes) {
-        cells.push(current);
-        current = "";
-      } else {
-        current += char;
-      }
+    if (char === '"' && insideQuotes && next === '"') {
+      // comillas escapadas ""
+      value += '"';
+      i++;
+      continue;
     }
-    cells.push(current);
-    rows.push(cells.map((c) => c.trim()));
+
+    if (char === '"') {
+      insideQuotes = !insideQuotes;
+      continue;
+    }
+
+    if (char === "," && !insideQuotes) {
+      current.push(value);
+      value = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !insideQuotes) {
+      if (value !== "" || current.length) {
+        current.push(value);
+        rows.push(current);
+        current = [];
+        value = "";
+      }
+      continue;
+    }
+
+    value += char;
+  }
+
+  // última celda/última fila
+  if (value !== "" || current.length) {
+    current.push(value);
+    rows.push(current);
   }
 
   return rows;
 }
 
-// Carga de datos desde Google Sheets
-async function loadInvitados() {
-  try {
-    const res = await fetch(CSV_URL);
-    const text = await res.text();
-    const rows = parseCSV(text);
+// Convierte texto CSV en array de objetos normalizados
+function csvToObjects(text) {
+  const rawRows = parseCSV(text);
+  if (!rawRows.length) return [];
 
-    const dataRows = rows.slice(1); // saltar encabezados
+  const headers = rawRows[0].map((h) => normalizeHeader(h || ""));
+  const dataRows = rawRows.slice(1);
 
-    allInvitados = dataRows.map((row) => ({
-      nombre: row[0] || "",
-      sector: row[1] || "",
-      cena: Number(row[2] || 0),
-      todoDia: Number(row[3] || 0),
-      debePagar: parseMoney(row[4]),
-      montoPagado: parseMoney(row[5]),
-      faltaPagar: parseMoney(row[6]),
-      observaciones: row[7] || ""
-    }));
-
-    filteredInvitados = [...allInvitados];
-
-    buildSectorFilter();
-    renderEverything();
-  } catch (err) {
-    console.error("Error cargando invitados:", err);
-  }
+  return dataRows
+    .filter((r) => r.some((cell) => String(cell).trim() !== ""))
+    .map((cells) => {
+      const obj = {};
+      headers.forEach((h, idx) => {
+        obj[h] = cells[idx] !== undefined ? cells[idx] : "";
+      });
+      return obj;
+    });
 }
 
-/* ===== FILTROS ===== */
+// -------------------- Datos y filtros --------------------
 
-function buildSectorFilter() {
-  const sectors = Array.from(
-    new Set(allInvitados.map((i) => i.sector).filter(Boolean))
-  ).sort();
-
-  // limpiar opciones excepto "Todos"
-  while (filterSector.options.length > 1) {
-    filterSector.remove(1);
+async function fetchData() {
+  const res = await fetch(SHEET_CSV_URL + "&t=" + Date.now()); // cache-buster
+  if (!res.ok) {
+    throw new Error("No se pudo leer la hoja de cálculo.");
   }
+  const text = await res.text();
+  const rows = csvToObjects(text);
 
-  sectors.forEach((sector) => {
-    const opt = document.createElement("option");
-    opt.value = sector;
-    opt.textContent = sector;
-    filterSector.appendChild(opt);
-  });
+  // Normalizamos nombres esperados
+  // (para evitar errores por cambios pequeños en los encabezados)
+  return rows.map((r) => ({
+    nombre: r.nombre || "",
+    sector: r.sector || "",
+    cena: r.cena || "0",
+    todoeldia: r.todoeldia || "0",
+    debepagar: r.debepagar || "0",
+    montopagado: r.montopagado || "0",
+    faltapagar: r.faltapagar || "0",
+    observaciones: r.observaciones || "",
+  }));
 }
 
 function applyFilters() {
-  const sectorVal = filterSector.value;
-  const paseVal = filterPase.value;
-  const pagoVal = filterPago.value;
+  const sectorValue = filterSectorEl?.value || "todos";
+  const tipoPaseValue = filterTipoPaseEl?.value || "todos";
+  const estadoPagoValue = filterEstadoPagoEl?.value || "todos";
 
-  filteredInvitados = allInvitados.filter((inv) => {
+  const filtered = allRows.filter((row) => {
+    const sector = (row.sector || "").trim();
+
+    const cenaNum = Number(row.cena) || 0;
+    const fullNum = Number(row.todoeldia) || 0;
+
     // Sector
-    if (sectorVal !== "todos" && inv.sector !== sectorVal) return false;
+    if (sectorValue !== "todos" && sector !== sectorValue) return false;
 
     // Tipo de pase
-    const isFull = inv.todoDia > 0;
-    const isCenaSolo = inv.cena > 0 && inv.todoDia === 0;
-
-    if (paseVal === "full" && !isFull) return false;
-    if (paseVal === "cena" && !isCenaSolo) return false;
+    if (tipoPaseValue === "full" && fullNum <= 0) return false;
+    if (tipoPaseValue === "solo-cena" && cenaNum <= 0) return false;
 
     // Estado de pago
-    const pagado =
-      inv.faltaPagar <= 0 &&
-      inv.montoPagado >= inv.debePagar &&
-      inv.debePagar > 0;
-
-    const pendiente =
-      inv.montoPagado <= 0 &&
-      inv.faltaPagar >= inv.debePagar &&
-      inv.debePagar > 0;
-
-    const parcial =
-      inv.montoPagado > 0 &&
-      inv.montoPagado < inv.debePagar &&
-      inv.faltaPagar > 0;
-
-    if (pagoVal === "pagado" && !pagado) return false;
-    if (pagoVal === "pendiente" && !pendiente) return false;
-    if (pagoVal === "parcial" && !parcial) return false;
+    if (estadoPagoValue !== "todos") {
+      const estado = getEstadoPago(row); // pendiente, parcial, pagado
+      if (estado !== estadoPagoValue) return false;
+    }
 
     return true;
   });
+
+  renderKPIs(filtered);
+  renderTable(filtered);
 }
 
-/* ===== RENDER ===== */
+// -------------------- Render KPIs y tabla --------------------
 
-function renderKPIs() {
-  const totalInvitados = filteredInvitados.length;
-  const fullPass = filteredInvitados.filter((i) => i.todoDia > 0).length;
-  const soloCena = filteredInvitados.filter(
-    (i) => i.cena > 0 && i.todoDia === 0
-  ).length;
+function renderKPIs(rows) {
+  // Sumamos personas, no filas
+  const kpi = rows.reduce(
+    (acc, row) => {
+      const cenaNum = Number(row.cena) || 0;
+      const fullNum = Number(row.todoeldia) || 0;
 
-  const recaudado = filteredInvitados.reduce(
-    (sum, i) => sum + i.montoPagado,
-    0
+      acc.totalPersonas += cenaNum + fullNum;
+      acc.fullPass += fullNum;
+      acc.soloCena += cenaNum;
+
+      acc.recaudado += parseMoney(row.montopagado);
+      acc.pendiente += parseMoney(row.faltapagar);
+
+      return acc;
+    },
+    { totalPersonas: 0, fullPass: 0, soloCena: 0, recaudado: 0, pendiente: 0 }
   );
-  const pendiente = filteredInvitados.reduce(
-    (sum, i) => sum + i.faltaPagar,
-    0
-  );
 
-  kpiTotal.textContent = totalInvitados;
-  kpiFull.textContent = fullPass;
-  kpiCena.textContent = soloCena;
-  kpiRecaudado.textContent = formatMoney(recaudado);
-  kpiPendiente.textContent = formatMoney(pendiente);
+  if (kpiConfirmadosEl)
+    kpiConfirmadosEl.textContent = kpi.totalPersonas.toString();
+  if (kpiFullPassEl) kpiFullPassEl.textContent = kpi.fullPass.toString();
+  if (kpiSoloCenaEl) kpiSoloCenaEl.textContent = kpi.soloCena.toString();
+
+  if (kpiRecaudadoEl) kpiRecaudadoEl.textContent = formatMoney(kpi.recaudado);
+  if (kpiPendienteEl) kpiPendienteEl.textContent = formatMoney(kpi.pendiente);
 }
 
-function renderTable() {
-  tablaBody.innerHTML = "";
+function renderTable(rows) {
+  if (!tablaBodyEl) return;
 
-  filteredInvitados.forEach((i) => {
+  tablaBodyEl.innerHTML = "";
+
+  rows.forEach((row) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${i.nombre}</td>
-      <td>${i.sector}</td>
-      <td>${i.cena || ""}</td>
-      <td>${i.todoDia || ""}</td>
-      <td>${formatMoney(i.debePagar)}</td>
-      <td>${formatMoney(i.montoPagado)}</td>
-      <td>${formatMoney(i.faltaPagar)}</td>
-      <td>${i.observaciones}</td>
-    `;
-    tablaBody.appendChild(tr);
+
+    const cenaNum = Number(row.cena) || 0;
+    const fullNum = Number(row.todoeldia) || 0;
+
+    const tdNombre = document.createElement("td");
+    tdNombre.textContent = row.nombre;
+    tr.appendChild(tdNombre);
+
+    const tdSector = document.createElement("td");
+    tdSector.textContent = row.sector;
+    tr.appendChild(tdSector);
+
+    const tdCena = document.createElement("td");
+    tdCena.textContent = cenaNum || "";
+    tr.appendChild(tdCena);
+
+    const tdFull = document.createElement("td");
+    tdFull.textContent = fullNum || "";
+    tr.appendChild(tdFull);
+
+    const tdDebe = document.createElement("td");
+    tdDebe.textContent = formatMoney(parseMoney(row.debepagar));
+    tr.appendChild(tdDebe);
+
+    const tdPagado = document.createElement("td");
+    tdPagado.textContent = formatMoney(parseMoney(row.montopagado));
+    tr.appendChild(tdPagado);
+
+    const tdFalta = document.createElement("td");
+    tdFalta.textContent = formatMoney(parseMoney(row.faltapagar));
+    tr.appendChild(tdFalta);
+
+    const tdObs = document.createElement("td");
+    tdObs.textContent = row.observaciones || "-";
+    tr.appendChild(tdObs);
+
+    tablaBodyEl.appendChild(tr);
   });
 
-  tableCount.textContent = `${filteredInvitados.length} registro${
-    filteredInvitados.length === 1 ? "" : "s"
-  }`;
+  if (recordsCountEl) {
+    recordsCountEl.textContent = `${rows.length} registros`;
+  }
 }
 
-function renderEverything() {
-  applyFilters();
-  renderKPIs();
-  renderTable();
+// -------------------- Filtros dinámicos --------------------
+
+function populateFilters() {
+  if (!filterSectorEl) return;
+
+  // Sectores únicos
+  const sectores = Array.from(
+    new Set(
+      allRows
+        .map((r) => (r.sector || "").trim())
+        .filter((v) => v && v !== "")
+    )
+  ).sort();
+
+  filterSectorEl.innerHTML = "";
+  const optAll = document.createElement("option");
+  optAll.value = "todos";
+  optAll.textContent = "Todos";
+  filterSectorEl.appendChild(optAll);
+
+  sectores.forEach((sector) => {
+    const opt = document.createElement("option");
+    opt.value = sector;
+    opt.textContent = sector;
+    filterSectorEl.appendChild(opt);
+  });
+
+  // Tipo de pase (fijo)
+  if (filterTipoPaseEl) {
+    filterTipoPaseEl.innerHTML = "";
+    const optT1 = document.createElement("option");
+    optT1.value = "todos";
+    optT1.textContent = "Todos";
+    const optT2 = document.createElement("option");
+    optT2.value = "full";
+    optT2.textContent = "Full Pass";
+    const optT3 = document.createElement("option");
+    optT3.value = "solo-cena";
+    optT3.textContent = "Solo Cena";
+
+    filterTipoPaseEl.appendChild(optT1);
+    filterTipoPaseEl.appendChild(optT2);
+    filterTipoPaseEl.appendChild(optT3);
+  }
+
+  // Estado de pago (fijo)
+  if (filterEstadoPagoEl) {
+    filterEstadoPagoEl.innerHTML = "";
+    const optE1 = document.createElement("option");
+    optE1.value = "todos";
+    optE1.textContent = "Todos";
+
+    const optE2 = document.createElement("option");
+    optE2.value = "pendiente";
+    optE2.textContent = "Pendiente";
+
+    const optE3 = document.createElement("option");
+    optE3.value = "parcial";
+    optE3.textContent = "Parcial";
+
+    const optE4 = document.createElement("option");
+    optE4.value = "pagado";
+    optE4.textContent = "Pagado";
+
+    filterEstadoPagoEl.appendChild(optE1);
+    filterEstadoPagoEl.appendChild(optE2);
+    filterEstadoPagoEl.appendChild(optE3);
+    filterEstadoPagoEl.appendChild(optE4);
+  }
 }
 
-/* ===== INICIO ===== */
+// -------------------- Init --------------------
 
+async function initDashboard() {
+  try {
+    if (reloadBtn) {
+      reloadBtn.disabled = true;
+      reloadBtn.textContent = "Cargando...";
+    }
+
+    allRows = await fetchData();
+    populateFilters();
+    applyFilters();
+  } catch (err) {
+    console.error(err);
+    alert("Hubo un problema al cargar los datos del evento.");
+  } finally {
+    if (reloadBtn) {
+      reloadBtn.disabled = false;
+      reloadBtn.textContent = "Cargar datos de nuevo";
+    }
+  }
+}
+
+// Eventos
 document.addEventListener("DOMContentLoaded", () => {
-  loadInvitados();
-
-  [filterSector, filterPase, filterPago].forEach((el) => {
-    el.addEventListener("change", () => {
-      renderEverything();
-    });
-  });
+  initDashboard();
 
   if (reloadBtn) {
-    reloadBtn.addEventListener("click", () => {
-      loadInvitados();
-    });
+    reloadBtn.addEventListener("click", () => initDashboard());
   }
+
+  if (filterSectorEl) filterSectorEl.addEventListener("change", applyFilters);
+  if (filterTipoPaseEl) filterTipoPaseEl.addEventListener("change", applyFilters);
+  if (filterEstadoPagoEl)
+    filterEstadoPagoEl.addEventListener("change", applyFilters);
 });
